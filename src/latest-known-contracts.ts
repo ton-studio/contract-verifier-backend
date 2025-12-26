@@ -141,7 +141,7 @@ async function update(storage: IndexStorageProvider, ipfsProvider: string) {
           mainFile: nameParts[nameParts.length - 1],
           compiler: ipfsData.data.compiler,
           timestamp: obj.timestamp,
-          verifierId: verifierId.toString(),
+          verifierId: verifierId.toString(16),
         };
       } catch (e) {
         logger.warn(`Processing address ${obj.address.toString()} failed`, e);
