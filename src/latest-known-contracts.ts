@@ -16,6 +16,7 @@ const isTestnet = process.env.NETWORK === "testnet";
 const cacheKey = isTestnet ? "cacheTestnet" : "cache";
 const lockKey = cacheKey + `_LOCK`;
 const ipfsTimeout = parseInt(process.env.IPFS_TIMEOUT || "15000", 10);
+const ipfsFetchParallelism = parseInt(process.env.IPFS_FETCH_PARALLELISM || "2", 10);
 
 type TonTransactionsArchiveProviderParams = {
   address: string;
@@ -64,7 +65,7 @@ async function update(storage: IndexStorageProvider, ipfsProvider: string) {
   let lockAcquired = false;
   try {
     const txnResult = await storage.setWithTxn<{ timestamp: number }>(lockKey, (lock) => {
-      if (lock && Date.now() - lock.timestamp < 40_000) {
+      if (lock && Date.now() - lock.timestamp < 600_000) {
         logger.debug(`Lock acquired by another instance`);
         return;
       }
@@ -85,7 +86,7 @@ async function update(storage: IndexStorageProvider, ipfsProvider: string) {
 
     const txns = await getTransactions({
       address: process.env.SOURCES_REGISTRY!,
-      limit: 100,
+      limit: 25,
       offset: 0,
       sort: "asc",
       startUtime: lastTimestamp,
@@ -95,7 +96,7 @@ async function update(storage: IndexStorageProvider, ipfsProvider: string) {
 
     const tc = await getTonClient();
 
-    const res = await async.mapLimit(txns, 10, async (obj: any) => {
+    const res = await async.mapLimit(txns, ipfsFetchParallelism, async (obj: any) => {
       try {
         const sourceItemContract = tc.open(
           SourceItem.createFromAddress(Address.parse(obj.address)),
@@ -109,13 +110,13 @@ async function update(storage: IndexStorageProvider, ipfsProvider: string) {
         const ipfsLink = contentCell.loadStringTail();
 
         let ipfsData;
+        let url = `https://${ipfsProvider}/ipfs/${ipfsLink.replace("ipfs://", "")}`;
         try {
-          ipfsData = await axios.get(
-            `https://${ipfsProvider}/ipfs/${ipfsLink.replace("ipfs://", "")}`,
-            { timeout: ipfsTimeout },
-          );
+          ipfsData = await axios.get(url, { timeout: ipfsTimeout });
         } catch (e) {
-          throw new Error("Unable to fetch IPFS cid: " + ipfsLink);
+          throw new Error(`Unable to fetch IPFS cid: ${ipfsLink} using ${url}`, {
+            cause: e,
+          });
         }
 
         const mainFilename = ipfsData.data.sources?.sort((a: any, b: any) => {
@@ -129,6 +130,8 @@ async function update(storage: IndexStorageProvider, ipfsProvider: string) {
           // @ts-ignore
           (m) => m[1],
         );
+
+        logger.debug(`Successfully processed ${obj.address.toString()}`);
 
         return {
           address: ipfsData.data.knownContractAddress,
