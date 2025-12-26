@@ -10,11 +10,7 @@ export async function checkPrerequisites() {
   const missingEnvVars = [
     "VERIFIER_ID",
     "SOURCES_REGISTRY",
-    "INFURA_ID",
-    "INFURA_SECRET",
     "PRIVATE_KEY",
-    "TACT_DEPLOYER_INFURA_ID",
-    "TACT_DEPLOYER_INFURA_SECRET",
     "NETWORK",
     "COMPILE_TIMEOUT",
   ]
