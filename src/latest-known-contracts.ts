@@ -15,6 +15,7 @@ const logger = getLogger("latest-known-contracts");
 const isTestnet = process.env.NETWORK === "testnet";
 const cacheKey = isTestnet ? "cacheTestnet" : "cache";
 const lockKey = cacheKey + `_LOCK`;
+const ipfsTimeout = parseInt(process.env.IPFS_TIMEOUT || "15000", 10);
 
 type TonTransactionsArchiveProviderParams = {
   address: string;
@@ -111,7 +112,7 @@ async function update(storage: IndexStorageProvider, ipfsProvider: string) {
         try {
           ipfsData = await axios.get(
             `https://${ipfsProvider}/ipfs/${ipfsLink.replace("ipfs://", "")}`,
-            { timeout: 3000 },
+            { timeout: ipfsTimeout },
           );
         } catch (e) {
           throw new Error("Unable to fetch IPFS cid: " + ipfsLink);
