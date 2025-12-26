@@ -2,9 +2,7 @@ import dotenv from "dotenv";
 import { Address } from "@ton/core";
 import axios from "axios";
 import async from "async";
-import { sha256 } from "./utils";
 import { getTonClient } from "./ton-reader-client";
-import { toBigIntBE } from "bigint-buffer";
 import { SourceItem } from "./wrappers/source-item";
 import { getLogger } from "./logger";
 import { IndexStorageProvider } from "./indexstorage/provider";
@@ -60,11 +58,7 @@ async function getTransactions(params: TonTransactionsArchiveProviderParams) {
   }));
 }
 
-async function update(
-  storage: IndexStorageProvider,
-  verifierIdSha256: Buffer,
-  ipfsProvider: string,
-) {
+async function update(storage: IndexStorageProvider, ipfsProvider: string) {
   logger.debug(`Updating latest verified`);
   let lockAcquired = false;
   try {
@@ -96,6 +90,8 @@ async function update(
       startUtime: lastTimestamp,
     });
 
+    logger.debug(`Got ${txns.length} transactions`);
+
     const tc = await getTonClient();
 
     const res = await async.mapLimit(txns, 10, async (obj: any) => {
@@ -104,11 +100,6 @@ async function update(
           SourceItem.createFromAddress(Address.parse(obj.address)),
         );
         const { verifierId, data } = await sourceItemContract.getData();
-
-        // Not our verifier id, ignore
-        if (verifierId !== toBigIntBE(verifierIdSha256)) {
-          return;
-        }
 
         const contentCell = data!.beginParse();
 
@@ -143,15 +134,17 @@ async function update(
           mainFile: nameParts[nameParts.length - 1],
           compiler: ipfsData.data.compiler,
           timestamp: obj.timestamp,
+          verifierId: verifierId.toString(),
         };
       } catch (e) {
-        logger.warn(e);
+        logger.warn(`Processing address ${obj.address.toString()} failed`, e);
         return;
       }
     });
 
-    logger.debug(res.length);
-    logger.debug(res.filter((o) => !!o).length);
+    const totalResults = res.length;
+    const successResults = res.filter((o) => !!o).length;
+    logger.debug(`Successfully processed ${successResults} of ${totalResults} addresses`);
 
     for (const r of res.filter((o) => !!o)) {
       await storage.addForDescendingOrder(cacheKey, r);
@@ -169,16 +162,12 @@ async function update(
   }
 }
 
-export function pollLatestVerified(
-  storage: IndexStorageProvider,
-  verifierId: string,
-  ipfsProvider: string,
-) {
-  void update(storage, sha256(verifierId), ipfsProvider);
+export function pollLatestVerified(storage: IndexStorageProvider, ipfsProvider: string) {
+  void update(storage, ipfsProvider);
 
   setInterval(async () => {
     try {
-      await update(storage, sha256(verifierId), ipfsProvider);
+      await update(storage, ipfsProvider);
     } catch (e) {
       logger.warn(`Unable to fetch latest verified ${e}`);
     }

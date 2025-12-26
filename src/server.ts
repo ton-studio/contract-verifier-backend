@@ -169,7 +169,7 @@ app.get("/hc", (req, res) => {
   const indexStorage = createIndexStorage(process.env.STORAGE_PROVIDER || "valkey");
 
   if (process.env.NODE_ENV === "production")
-    pollLatestVerified(indexStorage, process.env.VERIFIER_ID!, process.env.IPFS_PROVIDER!);
+    pollLatestVerified(indexStorage, process.env.IPFS_PROVIDER!);
 
   app.post(
     "/source",
