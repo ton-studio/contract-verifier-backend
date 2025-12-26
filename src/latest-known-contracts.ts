@@ -17,6 +17,9 @@ const cacheKey = isTestnet ? "cacheTestnet" : "cache";
 const lockKey = cacheKey + `_LOCK`;
 const ipfsTimeout = parseInt(process.env.IPFS_TIMEOUT || "15000", 10);
 const ipfsFetchParallelism = parseInt(process.env.IPFS_FETCH_PARALLELISM || "2", 10);
+const pollInterval = parseInt(process.env.POLL_INTERVAL || "300000", 10);
+const batchSize = parseInt(process.env.BATCH_SIZE || "25", 10);
+const lockDuration = parseInt(process.env.LOCK_DURATION || "600000", 10);
 
 type TonTransactionsArchiveProviderParams = {
   address: string;
@@ -65,7 +68,7 @@ async function update(storage: IndexStorageProvider, ipfsProvider: string) {
   let lockAcquired = false;
   try {
     const txnResult = await storage.setWithTxn<{ timestamp: number }>(lockKey, (lock) => {
-      if (lock && Date.now() - lock.timestamp < 600_000) {
+      if (lock && Date.now() - lock.timestamp < lockDuration) {
         logger.debug(`Lock acquired by another instance`);
         return;
       }
@@ -86,7 +89,7 @@ async function update(storage: IndexStorageProvider, ipfsProvider: string) {
 
     const txns = await getTransactions({
       address: process.env.SOURCES_REGISTRY!,
-      limit: 25,
+      limit: batchSize,
       offset: 0,
       sort: "asc",
       startUtime: lastTimestamp,
@@ -175,7 +178,7 @@ export function pollLatestVerified(storage: IndexStorageProvider, ipfsProvider: 
     } catch (e) {
       logger.warn(`Unable to fetch latest verified ${e}`);
     }
-  }, 60_000);
+  }, pollInterval);
 }
 
 export async function getLatestVerified(storage: IndexStorageProvider) {
