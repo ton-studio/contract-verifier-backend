@@ -22,19 +22,4 @@ export async function checkPrerequisites() {
     .join(" ");
 
   if (missingEnvVars) throw new Error("Missing env vars: " + missingEnvVars);
-
-  const { funcVersions } = await supportedVersionsReader.versions();
-
-  const missingFiles = funcVersions!
-    .map((versionDir: string) => [
-      path.join(binaryPath, versionDir, "func"),
-      path.join(binaryPath, versionDir, "fift"),
-      path.join(binaryPath, versionDir, "fiftlib", "Asm.fif"),
-      path.join(binaryPath, versionDir, "fiftlib", "Fift.fif"),
-    ])
-    .flat()
-    .filter((f) => !fs.existsSync(path.join(process.cwd(), f)))
-    .join(" ");
-
-  logger.error("Missing files: " + missingFiles);
 }

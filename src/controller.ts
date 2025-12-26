@@ -10,7 +10,7 @@ import path from "path";
 import tweetnacl from "tweetnacl";
 import { VerifyResult, Compiler, SourceItem } from "./types";
 import { Cell } from "@ton/core";
-import { CodeStorageProvider } from "./ipfs-code-storage-provider";
+import { CodeStorageProvider } from "./codestorage/provider";
 import { sha256, random64BitNumber, getNowHourRoundedDown } from "./utils";
 import { TonReaderClient } from "./ton-reader-client";
 import { validateMessageCell } from "./validate-message-cell";

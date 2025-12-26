@@ -89,19 +89,19 @@ get fun initialId(): int {
 }
 `;
 
-jest.mock("../supported-versions-reader", () => ({
-  supportedVersionsReader: {
-    versions: jest.fn(),
-  },
-}));
-
-const versionsMock = supportedVersionsReader.versions as jest.Mock;
+// jest.mock("../supported-versions-reader", () => ({
+//   supportedVersionsReader: {
+//     versions: jest.fn(),
+//   },
+// }));
+//
+// const versionsMock = supportedVersionsReader.versions as jest.Mock;
 
 const importTolk = async (version: string) => {
   return await DynamicImporter.tryImport("tolk", version);
 };
 beforeEach(() => {
-  versionsMock.mockResolvedValue({
+  jest.spyOn(supportedVersionsReader, "versions").mockResolvedValue({
     funcVersions: [],
     tactVersions: [],
     tolkVersions: ["1.0.0", "1.1.0"],

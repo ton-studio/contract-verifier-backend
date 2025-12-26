@@ -1,13 +1,13 @@
 import path from "path";
-import { IpfsCodeStorageProvider } from "./ipfs-code-storage-provider";
+import { CodeStorageProvider } from "./codestorage/provider";
 import { FileSystem } from "./source-verifier/tact-source-verifier";
 import { PackageFileFormat } from "tact-1.4.1";
 
 export class DeployController {
-  storageProvider: IpfsCodeStorageProvider;
+  storageProvider: CodeStorageProvider;
   fileSystem: FileSystem;
 
-  constructor(codeStorageProvider: IpfsCodeStorageProvider, fileSystem: FileSystem) {
+  constructor(codeStorageProvider: CodeStorageProvider, fileSystem: FileSystem) {
     this.storageProvider = codeStorageProvider;
     this.fileSystem = fileSystem;
   }

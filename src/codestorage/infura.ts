@@ -1,25 +1,10 @@
 import { create, IPFSHTTPClient } from "ipfs-http-client";
 import fs from "fs";
-import { ToContent } from "ipfs-core-types/src/utils";
 // @ts-ignore
 import { of } from "ipfs-only-hash";
-
-// This can be a trivial URL, a firebase key, IPFS hash etc.
-export type CodeLocationPointer = string;
-
-export type FileUploadSpec = {
-  path: string;
-  name: string;
-};
-
-export interface CodeStorageProvider {
-  write(files: FileUploadSpec[], pin: boolean): Promise<CodeLocationPointer[]>;
-  writeFromContent(files: Buffer[], pin: boolean): Promise<CodeLocationPointer[]>;
-  // Returns URL
-  read(pointer: CodeLocationPointer): Promise<string>;
-}
-
-export class IpfsCodeStorageProvider implements CodeStorageProvider {
+import { CodeStorageProvider, FileUploadSpec } from "./provider";
+import { ToContent } from "ipfs-core-types/src/utils";
+export class Infura implements CodeStorageProvider {
   #client: IPFSHTTPClient;
 
   constructor(infuraId: string, infuraSecret: string) {

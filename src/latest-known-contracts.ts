@@ -7,7 +7,7 @@ import { getTonClient } from "./ton-reader-client";
 import { toBigIntBE } from "bigint-buffer";
 import { SourceItem } from "./wrappers/source-item";
 import { getLogger } from "./logger";
-import { firebaseProvider } from "./firebase-provider";
+import { IndexStorageProvider } from "./indexstorage/provider";
 
 dotenv.config({ path: ".env.local" });
 dotenv.config({ path: ".env" });
@@ -60,11 +60,15 @@ async function getTransactions(params: TonTransactionsArchiveProviderParams) {
   }));
 }
 
-async function update(verifierIdSha256: Buffer, ipfsProvider: string) {
+async function update(
+  storage: IndexStorageProvider,
+  verifierIdSha256: Buffer,
+  ipfsProvider: string,
+) {
   logger.debug(`Updating latest verified`);
   let lockAcquired = false;
   try {
-    const txnResult = await firebaseProvider.setWithTxn<{ timestamp: number }>(lockKey, (lock) => {
+    const txnResult = await storage.setWithTxn<{ timestamp: number }>(lockKey, (lock) => {
       if (lock && Date.now() - lock.timestamp < 40_000) {
         logger.debug(`Lock acquired by another instance`);
         return;
@@ -78,8 +82,7 @@ async function update(verifierIdSha256: Buffer, ipfsProvider: string) {
     if (!lockAcquired) return;
 
     let lastTimestamp =
-      (await firebaseProvider.readItems<{ timestamp: number }>(cacheKey, 1))?.[0]?.timestamp ??
-      null;
+      (await storage.readItems<{ timestamp: number }>(cacheKey, 1))?.[0]?.timestamp ?? null;
 
     if (lastTimestamp) lastTimestamp += 1;
 
@@ -151,14 +154,14 @@ async function update(verifierIdSha256: Buffer, ipfsProvider: string) {
     logger.debug(res.filter((o) => !!o).length);
 
     for (const r of res.filter((o) => !!o)) {
-      await firebaseProvider.addForDescendingOrder(cacheKey, r);
+      await storage.addForDescendingOrder(cacheKey, r);
     }
   } catch (e) {
     logger.error(e);
   } finally {
     try {
       if (lockAcquired) {
-        await firebaseProvider.remove(lockKey);
+        await storage.remove(lockKey);
       }
     } catch (e) {
       logger.warn(e);
@@ -166,18 +169,22 @@ async function update(verifierIdSha256: Buffer, ipfsProvider: string) {
   }
 }
 
-export function pollLatestVerified(verifierId: string, ipfsProvider: string) {
-  void update(sha256(verifierId), ipfsProvider);
+export function pollLatestVerified(
+  storage: IndexStorageProvider,
+  verifierId: string,
+  ipfsProvider: string,
+) {
+  void update(storage, sha256(verifierId), ipfsProvider);
 
   setInterval(async () => {
     try {
-      await update(sha256(verifierId), ipfsProvider);
+      await update(storage, sha256(verifierId), ipfsProvider);
     } catch (e) {
       logger.warn(`Unable to fetch latest verified ${e}`);
     }
   }, 60_000);
 }
 
-export async function getLatestVerified() {
-  return firebaseProvider.readItems(cacheKey, 500);
+export async function getLatestVerified(storage: IndexStorageProvider) {
+  return storage.readItems(cacheKey, 500);
 }

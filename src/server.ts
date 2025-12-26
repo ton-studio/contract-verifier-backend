@@ -12,14 +12,9 @@ import mkdirp from "mkdirp";
 import { rmSync } from "fs";
 import path from "path";
 import idMiddleware from "./req-id-middleware";
-import { IpfsCodeStorageProvider } from "./ipfs-code-storage-provider";
 import rateLimit from "express-rate-limit";
 import { checkPrerequisites } from "./check-prerequisites";
-import { FiftSourceVerifier } from "./source-verifier/fift-source-verifier";
-import {
-  LegacyFuncSourceVerifier,
-  specialCharsRegex,
-} from "./source-verifier/func-source-verifier";
+import { FiftSourceVerifier, specialCharsRegex } from "./source-verifier/fift-source-verifier";
 import { TactSourceVerifier, FileSystem } from "./source-verifier/tact-source-verifier";
 import { TolkSourceVerifier } from "./source-verifier/tolk-source-verifier";
 import { TonReaderClientImpl } from "./ton-reader-client";
@@ -27,6 +22,8 @@ import { getLatestVerified, pollLatestVerified } from "./latest-known-contracts"
 import { DeployController } from "./deploy-controller";
 import { getLogger } from "./logger";
 import { FuncJSSourceVerifier } from "./source-verifier/funcjs-source-verifier";
+import { createCodeStorageProvider } from "./codestorage";
+import { createIndexStorage } from "./indexstorage";
 
 const logger = getLogger("server");
 
@@ -136,20 +133,26 @@ app.get("/hc", (req, res) => {
   };
 
   const deployController = new DeployController(
-    new IpfsCodeStorageProvider(
-      process.env.TACT_DEPLOYER_INFURA_ID!,
-      process.env.TACT_DEPLOYER_INFURA_SECRET!,
+    createCodeStorageProvider(
+      process.env.IPFS_STORAGE_PROVIDER,
+      process.env.TACT_DEPLOYER_INFURA_ID,
+      process.env.TACT_DEPLOYER_INFURA_SECRET,
+      process.env.TACT_DEPLOYER_PINATA_JWT,
+      process.env.TACT_DEPLOYER_PINATA_GATEWAY,
     ),
     fileSystem,
   );
 
   const controller = new Controller(
-    new IpfsCodeStorageProvider(process.env.INFURA_ID!, process.env.INFURA_SECRET!),
+    createCodeStorageProvider(
+      process.env.IPFS_STORAGE_PROVIDER,
+      process.env.INFURA_ID,
+      process.env.INFURA_SECRET,
+      process.env.PINATA_JWT,
+      process.env.PINATA_GATEWAY,
+    ),
     {
-      func:
-        process.env.LEGACY_FUNC_COMPILER === "true"
-          ? new LegacyFuncSourceVerifier()
-          : new FuncJSSourceVerifier(),
+      func: new FuncJSSourceVerifier(),
       fift: new FiftSourceVerifier(),
       tolk: new TolkSourceVerifier(),
       tact: new TactSourceVerifier(fileSystem),
@@ -163,8 +166,10 @@ app.get("/hc", (req, res) => {
     new TonReaderClientImpl(),
   );
 
+  const indexStorage = createIndexStorage(process.env.STORAGE_PROVIDER || "valkey");
+
   if (process.env.NODE_ENV === "production")
-    pollLatestVerified(process.env.VERIFIER_ID!, process.env.IPFS_PROVIDER!);
+    pollLatestVerified(indexStorage, process.env.VERIFIER_ID!, process.env.IPFS_PROVIDER!);
 
   app.post(
     "/source",
@@ -231,7 +236,7 @@ app.get("/hc", (req, res) => {
   if (process.env.NODE_ENV === "production") checkPrerequisites();
 
   app.get("/latestVerified", async (req, res) => {
-    res.json(await getLatestVerified());
+    res.json(await getLatestVerified(indexStorage));
   });
 
   app.use(function (err: any, req: any, res: any, next: any) {
