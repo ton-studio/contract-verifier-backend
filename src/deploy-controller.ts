@@ -35,7 +35,7 @@ export class DeployController {
     const fileContents = await Promise.all(
       files.map(async (name) => {
         const content = await this.fileSystem.readFile(path.join(tmpDir, name));
-        const [hash] = await this.storageProvider.hashForContent([content]);
+        const [hash] = await this.storageProvider.writeFromContent([content], true);
         return { name, hash, content };
       }),
     );
@@ -62,7 +62,7 @@ export class DeployController {
         }),
         ...fileContents.map(({ content }) => content),
       ],
-      false,
+      true,
     );
 
     logger.debug("Uploading ABI to storage");
