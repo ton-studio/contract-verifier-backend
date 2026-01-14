@@ -5,6 +5,9 @@ import { of } from "ipfs-only-hash";
 import { Readable } from "stream";
 import { PinataSDK } from "pinata";
 import { CodeStorageProvider, FileUploadSpec } from "./provider";
+import { getLogger } from "../logger";
+
+const logger = getLogger("pinata");
 
 export class Pinata implements CodeStorageProvider {
   #pinata: PinataSDK;
@@ -20,8 +23,11 @@ export class Pinata implements CodeStorageProvider {
   }
 
   async writeFromContent(files: ToContent[], pin: boolean): Promise<string[]> {
-    return Promise.all(
-      files.map(async (f) => {
+    logger.debug("Writing content to IPFS", { filesCount: files.length, pin });
+    const startTime = Date.now();
+
+    const results = await Promise.all(
+      files.map(async (f, index) => {
         // Convert ToContent to a File-like object that Pinata SDK can handle
         let fileData: Buffer;
         if (Buffer.isBuffer(f)) {
@@ -41,25 +47,73 @@ export class Pinata implements CodeStorageProvider {
         // Create a File from the buffer
         const file = new File([fileData], "file");
         const result = await this.#pinata.upload.public.file(file);
-        return `ipfs://${result.cid}`;
+        const cid = `ipfs://${result.cid}`;
+        logger.debug("File uploaded to IPFS", { index, cid });
+        return cid;
       }),
     );
+
+    logger.info("Content written to IPFS successfully", {
+      filesCount: results.length,
+      duration: Date.now() - startTime,
+    });
+
+    return results;
   }
 
   async write(files: FileUploadSpec[], pin: boolean): Promise<string[]> {
-    return Promise.all(
-      files.map(async (fileSpec) => {
+    logger.debug("Writing files to IPFS", {
+      filesCount: files.length,
+      pin,
+      files: files.map((f) => f.name),
+    });
+    const startTime = Date.now();
+
+    const results = await Promise.all(
+      files.map(async (fileSpec, index) => {
         // Read the file from the filesystem
         const fileData = await fs.promises.readFile(fileSpec.path);
         const file = new File([fileData], fileSpec.name);
         const result = await this.#pinata.upload.public.file(file);
-        return `ipfs://${result.cid}`;
+        const cid = `ipfs://${result.cid}`;
+        logger.debug("File uploaded to IPFS", { index, fileName: fileSpec.name, cid });
+        return cid;
       }),
     );
+
+    logger.info("Files written to IPFS successfully", {
+      filesCount: results.length,
+      duration: Date.now() - startTime,
+    });
+
+    return results;
   }
 
   async read(pointer: string): Promise<string> {
+    logger.debug("Reading from IPFS", { pointer });
+    const startTime = Date.now();
+
     const hash = pointer.replace("ipfs://", "");
-    return (await fetch(`https://${this.#gateway}/ipfs/${hash}`)).text();
+    const url = `https://${this.#gateway}/ipfs/${hash}`;
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      logger.error("Failed to read from IPFS", {
+        pointer,
+        url,
+        status: response.status,
+        statusText: response.statusText,
+      });
+      throw new Error(`IPFS read failed: ${response.status} ${response.statusText}`);
+    }
+
+    const text = await response.text();
+    logger.debug("Successfully read from IPFS", {
+      pointer,
+      duration: Date.now() - startTime,
+      size: text.length,
+    });
+
+    return text;
   }
 }

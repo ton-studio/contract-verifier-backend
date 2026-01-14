@@ -100,7 +100,13 @@ async function update(storage: IndexStorageProvider, ipfsProvider: string) {
     const tc = await getTonClient();
 
     const res = await async.mapLimit(txns, ipfsFetchParallelism, async (obj: any) => {
+      logger.debug("Processing transaction", {
+        address: obj.address,
+        timestamp: obj.timestamp,
+      });
+
       try {
+        logger.debug("Fetching source item data", { address: obj.address });
         const sourceItemContract = tc.open(
           SourceItem.createFromAddress(Address.parse(obj.address)),
         );
@@ -112,11 +118,30 @@ async function update(storage: IndexStorageProvider, ipfsProvider: string) {
         if (version !== 1) throw new Error("Unsupported version");
         const ipfsLink = contentCell.loadStringTail();
 
+        logger.debug("Fetching from IPFS", {
+          url: ipfsLink,
+          address: obj.address,
+        });
+
         let ipfsData;
         let url = `https://${ipfsProvider}/ipfs/${ipfsLink.replace("ipfs://", "")}`;
+        const ipfsFetchStart = Date.now();
         try {
           ipfsData = await axios.get(url, { timeout: ipfsTimeout });
+          logger.debug("IPFS fetch successful", {
+            address: obj.address,
+            ipfsLink,
+            duration: Date.now() - ipfsFetchStart,
+            dataSize: JSON.stringify(ipfsData.data).length,
+          });
         } catch (e) {
+          logger.warn("IPFS fetch failed", {
+            url,
+            ipfsLink,
+            address: obj.address,
+            error: e.message,
+            duration: Date.now() - ipfsFetchStart,
+          });
           throw new Error(`Unable to fetch IPFS cid: ${ipfsLink} using ${url}`, {
             cause: e,
           });
@@ -134,17 +159,28 @@ async function update(storage: IndexStorageProvider, ipfsProvider: string) {
           (m) => m[1],
         );
 
-        logger.debug(`Successfully processed ${obj.address.toString()}`);
-
-        return {
+        const result = {
           address: ipfsData.data.knownContractAddress,
           mainFile: nameParts[nameParts.length - 1],
           compiler: ipfsData.data.compiler,
           timestamp: obj.timestamp,
           verifierId: verifierId.toString(16),
         };
+
+        logger.info("Successfully processed contract", {
+          address: obj.address.toString(),
+          compiler: result.compiler,
+          mainFile: result.mainFile,
+          verifierId: result.verifierId,
+        });
+
+        return result;
       } catch (e) {
-        logger.warn(`Processing address ${obj.address.toString()} failed`, e);
+        logger.warn("Failed to process contract", {
+          address: obj.address.toString(),
+          error: e.message,
+          timestamp: obj.timestamp,
+        });
         return;
       }
     });

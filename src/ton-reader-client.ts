@@ -5,6 +5,9 @@ import { LiteClient, LiteRoundRobinEngine, LiteSingleEngine } from "ton-lite-cli
 import { ContractVerifier } from "@ton-community/contract-verifier-sdk";
 import { VerifierRegistry } from "./wrappers/verifier-registry";
 import { SourcesRegistry } from "./wrappers/sources-registry";
+import { getLogger } from "./logger";
+
+const logger = getLogger("ton-reader-client");
 
 export type VerifierConfig = {
   verifiers: Buffer[];
@@ -29,13 +32,16 @@ let clientPromise: Promise<LiteClient> | null = null;
 
 export async function getTonClient(): Promise<LiteClient> {
   if (clientPromise) {
+    logger.debug("Returning cached TON client");
     return clientPromise;
   }
 
   try {
+    logger.info("Creating new TON client connection");
     clientPromise = createClient();
     return await clientPromise;
   } catch (error) {
+    logger.error("Failed to create TON client", { error });
     clientPromise = null;
     throw error;
   }
@@ -47,17 +53,30 @@ async function createClient(): Promise<LiteClient> {
     ? "https://ton.org/testnet-global.config.json"
     : "https://ton.org/global.config.json";
 
-  console.log("Using config URL:" + configUrl);
+  logger.info("Fetching TON config", {
+    configUrl,
+    network: isTestnet ? "testnet" : "mainnet",
+  });
 
   const response = await fetch(configUrl);
   if (!response.ok) {
+    logger.error("Failed to fetch TON config", {
+      configUrl,
+      status: response.status,
+      statusText: response.statusText,
+    });
     throw new Error(`Failed to fetch TON config: ${response.status}`);
   }
 
   const config = await response.json();
   if (!config.liteservers?.length) {
+    logger.error("No liteservers in config", { configUrl });
     throw new Error("No liteservers found in config");
   }
+
+  logger.debug("Creating lite engines", {
+    liteserversCount: config.liteservers.length,
+  });
 
   const engines: LiteSingleEngine[] = [];
 
@@ -70,6 +89,12 @@ async function createClient(): Promise<LiteClient> {
   }
 
   const engine = new LiteRoundRobinEngine(engines);
+
+  logger.info("TON client created successfully", {
+    liteserversCount: config.liteservers.length,
+    network: isTestnet ? "testnet" : "mainnet",
+  });
+
   return new LiteClient({ engine });
 }
 
@@ -89,6 +114,11 @@ export class TonReaderClientImpl implements TonReaderClient {
     verifierId: string,
     sourcesRegistryAddress: string,
   ): Promise<VerifierConfig> {
+    logger.debug("Getting verifier config", {
+      verifierId,
+      sourcesRegistryAddress,
+    });
+
     const tc = await getTonClient();
 
     const sourcesRegistryContract = tc.open(
@@ -108,6 +138,12 @@ export class TonReaderClientImpl implements TonReaderClient {
       verifierConfig.loadDict(Dictionary.Keys.BigUint(256), createNullValue()).keys(),
     ).map((k) => toBufferBE(k, 32));
 
+    logger.info("Retrieved verifier config", {
+      verifierId,
+      quorum,
+      verifiersCount: verifiers.length,
+    });
+
     return {
       verifiers,
       quorum,
@@ -115,9 +151,19 @@ export class TonReaderClientImpl implements TonReaderClient {
   }
 
   async isProofDeployed(codeCellHash: string, verifierId: string): Promise<boolean | undefined> {
-    return !!(await ContractVerifier.getSourcesJsonUrl(codeCellHash, {
+    logger.debug("Checking if proof deployed", { codeCellHash, verifierId });
+
+    const result = !!(await ContractVerifier.getSourcesJsonUrl(codeCellHash, {
       verifier: verifierId,
       testnet: process.env.NETWORK === "testnet",
     }));
+
+    logger.debug("Proof deployment check result", {
+      codeCellHash,
+      verifierId,
+      isDeployed: result,
+    });
+
+    return result;
   }
 }
