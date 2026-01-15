@@ -1,4 +1,5 @@
 import fs from "fs";
+import path from "path";
 import { ToContent } from "ipfs-core-types/src/utils";
 // @ts-ignore
 import { of } from "ipfs-only-hash";
@@ -73,7 +74,7 @@ export class Pinata implements CodeStorageProvider {
       files.map(async (fileSpec, index) => {
         // Read the file from the filesystem
         const fileData = await fs.promises.readFile(fileSpec.path);
-        const file = new File([fileData], fileSpec.name);
+        const file = new File([fileData], path.basename(fileSpec.name));
         const result = await this.#pinata.upload.public.file(file);
         const cid = `ipfs://${result.cid}`;
         logger.debug("File uploaded to IPFS", { index, fileName: fileSpec.name, cid });
