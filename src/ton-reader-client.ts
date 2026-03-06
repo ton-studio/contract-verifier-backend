@@ -2,7 +2,6 @@ import { Address, Dictionary, DictionaryValue } from "@ton/core";
 import { toBigIntBE, toBufferBE } from "bigint-buffer";
 import { sha256 } from "./utils";
 import { LiteClient, LiteRoundRobinEngine, LiteSingleEngine } from "ton-lite-client";
-import { ContractVerifier } from "@ton-community/contract-verifier-sdk";
 import { VerifierRegistry } from "./wrappers/verifier-registry";
 import { SourcesRegistry } from "./wrappers/sources-registry";
 import { getLogger } from "./logger";
@@ -15,7 +14,11 @@ export type VerifierConfig = {
 };
 
 export interface TonReaderClient {
-  isProofDeployed(codeCellHash: string, verifierId: string): Promise<boolean | undefined>;
+  isProofDeployed(
+    codeCellHash: string,
+    verifierId: string,
+    sourcesRegistryAddress: string,
+  ): Promise<boolean | undefined>;
   getVerifierConfig(verifierId: string, verifierRegistryAddress: string): Promise<VerifierConfig>;
 }
 
@@ -150,20 +153,46 @@ export class TonReaderClientImpl implements TonReaderClient {
     };
   }
 
-  async isProofDeployed(codeCellHash: string, verifierId: string): Promise<boolean | undefined> {
-    logger.debug("Checking if proof deployed", { codeCellHash, verifierId });
-
-    const result = !!(await ContractVerifier.getSourcesJsonUrl(codeCellHash, {
-      verifier: verifierId,
-      testnet: process.env.NETWORK === "testnet",
-    }));
-
-    logger.debug("Proof deployment check result", {
+  async isProofDeployed(
+    codeCellHash: string,
+    verifierId: string,
+    sourcesRegistryAddress: string,
+  ): Promise<boolean | undefined> {
+    logger.debug("Checking if proof deployed", {
       codeCellHash,
       verifierId,
-      isDeployed: result,
+      sourcesRegistryAddress,
     });
 
-    return result;
+    try {
+      const tc = await getTonClient();
+      const sourcesRegistryContract = tc.open(
+        SourcesRegistry.createFromAddress(Address.parse(sourcesRegistryAddress)),
+      );
+
+      const sourceItemAddress = await sourcesRegistryContract.getSourceItemAddress(
+        verifierId,
+        codeCellHash,
+      );
+      const sourceItemState = await tc.provider(sourceItemAddress).getState();
+      const isDeployed = sourceItemState.state.type === "active";
+
+      logger.debug("Proof deployment check result", {
+        codeCellHash,
+        verifierId,
+        isDeployed,
+      });
+
+      return isDeployed;
+    } catch (error) {
+      logger.error("Failed to check proof deployment status", {
+        codeCellHash,
+        verifierId,
+        sourcesRegistryAddress,
+        error,
+      });
+
+      return undefined;
+    }
   }
 }

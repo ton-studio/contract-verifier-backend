@@ -85,7 +85,11 @@ class StubTonReaderClient implements TonReaderClient {
       ],
     };
   }
-  async isProofDeployed(codeCellHash: string, verifierId: string): Promise<boolean | undefined> {
+  async isProofDeployed(
+    codeCellHash: string,
+    verifierId: string,
+    sourcesRegistryAddress: string,
+  ): Promise<boolean | undefined> {
     return false;
   }
 }

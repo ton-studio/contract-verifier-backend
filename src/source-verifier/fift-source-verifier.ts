@@ -5,7 +5,7 @@ import { readFile, writeFile } from "fs/promises";
 import { CompileResult, SourceVerifier, SourceVerifyPayload } from "../types";
 import path from "path";
 import { Cell } from "@ton/core";
-import { FuncCompilerVersion } from "@ton-community/contract-verifier-sdk";
+import { FuncCompilerVersion } from "../types";
 import { binaryPath } from "../binaries";
 import { getLogger } from "../logger";
 

@@ -93,6 +93,7 @@ export class Controller {
       const isDeployed = await this.tonReaderClient.isProofDeployed(
         verificationPayload.knownContractHash,
         this.config.verifierId,
+        this.config.sourcesRegistryAddress,
       );
       if (isDeployed) {
         logger.warn("Contract already verified", {

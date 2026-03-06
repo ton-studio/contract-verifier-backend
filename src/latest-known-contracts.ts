@@ -127,27 +127,28 @@ async function update(storage: IndexStorageProvider, ipfsProvider: string) {
         let url = `https://${ipfsProvider}/ipfs/${ipfsLink.replace("ipfs://", "")}`;
         const ipfsFetchStart = Date.now();
         try {
-          ipfsData = await axios.get(url, { timeout: ipfsTimeout });
+          ipfsData = (await axios.get(url, { timeout: ipfsTimeout })).data;
           logger.debug("IPFS fetch successful", {
             address: obj.address,
             ipfsLink,
             duration: Date.now() - ipfsFetchStart,
-            dataSize: JSON.stringify(ipfsData.data).length,
+            dataSize: ipfsData ? JSON.stringify(ipfsData) : 0,
           });
         } catch (e) {
+          const error = e instanceof Error ? e : new Error(String(e));
           logger.warn("IPFS fetch failed", {
             url,
             ipfsLink,
             address: obj.address,
-            error: e.message,
+            error: error.message,
             duration: Date.now() - ipfsFetchStart,
           });
           throw new Error(`Unable to fetch IPFS cid: ${ipfsLink} using ${url}`, {
-            cause: e,
+            cause: error,
           });
         }
 
-        const mainFilename = ipfsData.data.sources?.sort((a: any, b: any) => {
+        const mainFilename = ipfsData.sources?.sort((a: any, b: any) => {
           if (a.type && b.type) {
             return Number(b.type === "code") - Number(a.type === "code");
           }
@@ -160,9 +161,9 @@ async function update(storage: IndexStorageProvider, ipfsProvider: string) {
         );
 
         const result = {
-          address: ipfsData.data.knownContractAddress,
+          address: ipfsData.knownContractAddress,
           mainFile: nameParts[nameParts.length - 1],
-          compiler: ipfsData.data.compiler,
+          compiler: ipfsData.compiler,
           timestamp: obj.timestamp,
           verifierId: verifierId.toString(16),
         };
