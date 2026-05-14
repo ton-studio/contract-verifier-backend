@@ -134,6 +134,17 @@ export class Controller {
       filesUploaded: fileLocators.length,
     });
 
+    let compilerOutputUrl: string | undefined;
+    if (compileResult.compilerOutput && Object.keys(compileResult.compilerOutput).length > 0) {
+      logger.debug("Uploading compiler output to IPFS");
+      const [url] = await this.ipfsProvider.writeFromContent(
+        [Buffer.from(JSON.stringify(compileResult.compilerOutput))],
+        true,
+      );
+      compilerOutputUrl = url;
+      logger.info("Compiler output uploaded", { compilerOutputUrl });
+    }
+
     const sourceSpec: SourceItem = {
       compilerSettings: compileResult.compilerSettings,
       compiler: verificationPayload.compiler,
@@ -146,6 +157,7 @@ export class Controller {
         };
       }),
       knownContractAddress: verificationPayload.knownContractAddress,
+      ...(compilerOutputUrl ? { compilerOutputUrl } : {}),
     };
 
     // Upload source spec JSON to IPFS

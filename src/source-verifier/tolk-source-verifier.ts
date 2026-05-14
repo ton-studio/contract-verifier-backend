@@ -123,6 +123,7 @@ export class TolkSourceVerifier implements SourceVerifier {
             isEntrypoint: s.isEntrypoint,
           };
         }),
+        compilerOutput: compileRes,
       };
     } catch (e) {
       logger.error("Tolk verification error", { error: e.toString() });
